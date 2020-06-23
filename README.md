@@ -22,5 +22,7 @@ The dislocation lies horizontally with the electron beam into the image (i.e. th
 10) Foil normal in Miller indices
 11) g-vector in Miller indices
 
+Images are saved as 32-bit .tif files and a .png using the default path.
+
 
 Very significant speed up (10^3 - 10^5) would be possible by using a more efficient integration routine, linear combination of solutions, and parallelisation on a pixel basis using a GPU.  Maybe to be implemented at a future time.
