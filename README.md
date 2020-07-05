@@ -18,6 +18,7 @@ The dislocation lies horizontally with the electron beam into the image (i.e. th
 6) Lattice parameter a0, in nm.
 7) Poisson's ratio nu.
 8) Burgers vector b in the usual Miller indices (fractional unit cell coordinates).  In version v1.4 there are TWO parallel dislocations with Burgers vector b1 and b2.
+
 8a) In version v1.4 the position of the two dislocations relative to the centre of the simulation volume are given by coordinates q1 and q2.
 9) Line direction u in Miller indices
 10) Foil normal z in Miller indices
