@@ -12,7 +12,7 @@ The dislocation lies horizontally with the electron beam into the image (i.e. th
 
 1) Extinction distance Xg can be obtained from tables, or calculated using scattering factors.  The imaginary parts Xgi and X0i determine the absorption behaviour.  A typical extinction distance for imaging dislocations in fcc materials is between 20 and 30 nm.
 2) Thickness t.  In nm.
-3) Integration step dt, also in nm. The calculation is done in slices of thickness dt. dt>1 speeds up the calculation in proportion (dt=5 is 5 times faster than dt=1) BUT there will be artefacts in the calculation next to the dislocation line.  Useful for a quick setup run to make sure things work as expected.  There is little beneftit from having dt<0.1.
+3) Integration step dt, also in nm. The calculation is done in slices of thickness dt. dt>1 speeds up the calculation in proportion (dt=5 is 5 times faster than dt=1) BUT there will be artefacts in the calculation next to the dislocation line.  Useful for a quick setup run to make sure things work as expected.  There is little beneftit from having dt<0.5.
 4) Padding pad, in pixels.  The image height is 2*pad; there is also padding to the left and right of the intersection points.
 5) Picmax - the maximum image size.  Will over-rule pad.
 6) Lattice parameter a0, in nm.
