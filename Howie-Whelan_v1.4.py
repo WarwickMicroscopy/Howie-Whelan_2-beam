@@ -10,7 +10,7 @@ Image calculations for a dislocation:
 ignoring dilational components so that everything can be expressed as a local 
 change in deviation parameter s
 
-Deviation parameter loop version
+Perfect dislocation dipole version
 
 @author: Richard Beanland
 """
@@ -95,7 +95,7 @@ Xg = 20.0 + 1j*X0i*1.1#nm
 s = 0.0
 
 # crystal thickness, nm
-t = 50#nm
+t = 100#nm
 
 #integration step, nm
 dt = 1#nm
@@ -104,7 +104,7 @@ dt = 1#nm
 pix2nm = 1#nm per pixel
 
 # default number of pixels arounnd the dislocation
-pad = 20#pixels
+pad = 30#pixels
 # max image size in pixels & nm
 # NB MUST be an even number since the dislocation lies at the boundary between pixels
 # will OVER-RULE pad to make the image smaller
@@ -119,8 +119,14 @@ nu = 0.3
 ## Vector inputs
 # NB cubic crystals only! Everything here in the crystal reference frame
 
-# Burgers vector
-b = np.array((0.5,0.,-0.5))
+# Burgers vectors: two dislocations
+b1 = np.array((0.5,0.,-0.5))
+b2 = np.array((-0.5,0.,0.5))
+
+# position of centre point of dislocation line relative to centre of volume
+# ((1,0,0)) is vertical up, ((0,1,0)) is horizontal right, ((0,0,1)) is horiz. left
+q1 = np.array((1,0,0))#pixels
+q2 = np.array((0,0,0))
 
 # line direction 
 u = np.array((1,1,1))
@@ -131,9 +137,6 @@ z = np.array((1,1,0))
 # g-vector 
 g = np.array((-2,2,0))
 
-# position of centre point of dislocation line relative to centre of volume
-# ((1,0,0)) is vertical up, ((0,1,0)) is horizontal right, ((0,0,1)) is horiz. left
-q = np.array((10,0,0))
 
 
 ### setup calculations ###
@@ -148,12 +151,13 @@ z = z/(np.dot(z,z)**0.5)
 # we want u pointing to the same side of the foil as z
 if(np.dot(u,z)<0):#they're antiparallel, reverse u and b 
     u=-u
-    b=-b
+    b1=-b1
+    b2=-b2
 # angle between dislocation and z-axis
 phi = np.arccos(abs(np.dot(u,z)))
 #check if they're parallel and use an alternative if so
 if (abs(np.dot(u,z)-1) < eps):#they're parallel, set x parallel to b
-    x = b[:]
+    x = b1[:]
     x = x/(np.dot(x,x)**0.5)
     if (abs(np.dot(x,z)-1) < eps):#they're parallel too, set x parallel to g
         x = g[:]#this will fail for u=z=b=g but it would be stupid
@@ -181,14 +185,17 @@ d2c = np.transpose(c2d)
 leng=pad/4
 gDisp = c2s @ g
 gDisp = leng*gDisp/(np.dot(gDisp,gDisp)**0.5)
-bDisp = c2s @ b
-bDisp = leng*bDisp/(np.dot(bDisp,bDisp)**0.5)
+bDisp1 = c2s @ b1
+bDisp1 = leng*bDisp1/(np.dot(bDisp1,bDisp1)**0.5)
+bDisp2 = c2s @ b2
+bDisp2 = leng*bDisp2/(np.dot(bDisp2,bDisp2)**0.5)
 
 # g-vector magnitude, nm^-1
 g = g/a0
 
 #Burgers vector in nm
-b = a0*b
+b1 = a0*b1
+b2 = a0*b2
 
 ##################################
 # image dimensions are length of dislocation line projection in y
@@ -221,20 +228,30 @@ sxz=np.zeros((zrange,xmax),dtype='f')#32-bit for .tif saving
 #small z value used to get derivative
 dz = np.array((0,0,0.01))#pix
 #point the dislocation passes through - the centre of simulation volume, in pixels
-p = np.array((pad+0.5, 0.5, (hpad+zmax)*dt+0.5)) + q
+p1 = np.array((pad+0.5, 0.5, (hpad+zmax)*dt+0.5)) + q1
+p2 = np.array((pad+0.5, 0.5, (hpad+zmax)*dt+0.5)) + q2
 # calculation of displacements
 for i in range (xmax):
     #looping over z with ymax steps 
     for k in range(zrange):
         #coord of current voxel relative to centre in simulation frame is xyz
         v = np.array((i, 0, k*dt))
-        xyz = s2c @ (pix2nm*(v-p))
-        R = displaceR( xyz, b, u, c2d, d2c )
+        #first dislocation
+        xyz = s2c @ (pix2nm*(v-p1))
+        R1 = displaceR( xyz, b1, u, c2d, d2c )
+        #second dislocation
+        xyz = s2c @ (pix2nm*(v-p2))
+        R2 = displaceR( xyz, b2, u, c2d, d2c )
+        R = R1 + R2
         gdotR = np.dot(g,R)
-        #and now the same, a small distance along z to get the differential
-        xyz = s2c @ (pix2nm*(v-p+dz))
-        R = displaceR( xyz, b, u, c2d, d2c )
-        gdotRdz = np.dot(g,R)
+        #dislocation 1 at dz
+        xyz = s2c @ (pix2nm*(v-p1+dz))
+        R1 = displaceR( xyz, b1, u, c2d, d2c )
+        #second dislocation
+        xyz = s2c @ (pix2nm*(v-p2+dz))
+        R2 = displaceR( xyz, b2, u, c2d, d2c )
+        Rdz = R1 + R2
+        gdotRdz = np.dot(g,Rdz)
         sxz[k,i] = (gdotRdz - gdotR)/(dz[2]*pix2nm)
 
 ##################################
@@ -299,11 +316,13 @@ plt.annotate("g", xy=(pt+2, pt+2))
 fig.add_subplot(2, 1, 2)
 plt.imshow(Id)
 plt.axis("off")
-if ((abs(bDisp[0])+abs(bDisp[1])) < eps):#Burgers vector is along z
+if ((abs(bDisp1[0])+abs(bDisp1[1])) < eps):#Burgers vector is along z
     plt.annotate(".", xy=(pt,pt))
 else:
-    plt.arrow(pt,pt,bDisp[1],-bDisp[0], shape='full', head_width=3, head_length=6)    
-plt.annotate("b", xy=(pt+2, pt+2))
+    plt.arrow(pt,pt,bDisp1[1],-bDisp1[0], shape='full', head_width=3, head_length=6)    
+    plt.arrow(pt,3*pt,bDisp2[1],-bDisp2[0], shape='full', head_width=3, head_length=6)    
+plt.annotate("b1", xy=(pt+2, pt+2))
+plt.annotate("b2", xy=(pt+2, 3*pt+2))
 bbox_inches=0
 plotnameP="t="+str(int(t))+"_s"+str(s)+".png"
 print(plotnameP)
