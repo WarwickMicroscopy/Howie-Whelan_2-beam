@@ -6,6 +6,7 @@ This is a more-or-less functioning 2-beam diffraction contrast dislocation image
 The code works for cubic crystals only, avoiding the hassle of converting non-cubic cell coordinates to match the simulation volume.  It uses the column approximation, assuming that each pixel can be calculated individually.  Dislocation displacements are for infinite straight dislocations and take no account of surface relaxation. Hydrostatic expansion/contraction is also ignored.  Multiple beam effects are important in many cases (e.g. weak beam imaging), which can't be accommodated in this simulation.  It is pretty basic. Calculation time is proportional to the number of voxels, i.e. crystal thickness and the number of pixels. My laptop manages a voxel in about 0.5 ms.
 
 The dislocation lies horizontally with the electron beam into the image (i.e. the same way as seen on a conventional TEM screen).  Its intersection with the top surface is to the left, the intersection with the bottom surface to the right.
+Version v1.4 has two dislocations rather than one (gives the same result as v1.3 if the Burgers vector of the second dislocation is set to zero).  Version v1.5 adds the stacking fault contrast between the dislocations if they are partial dislocations.
 
 
 *** Inputs are between lines 90 and 135 and should be fairly obvious to complete.
