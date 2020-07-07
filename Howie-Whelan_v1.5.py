@@ -18,7 +18,8 @@ Dissociated dislocation version
 import numpy as np
 import matplotlib.pyplot as plt
 import time
-from libtiff import TIFF as tif
+# from libtiff import TIFF as tif
+from PIL import Image
 
 # to avoid division by zero errors
 eps = 0.000000000001
@@ -96,13 +97,15 @@ Xg = 20.0 + 1j*X0i*1.1#nm
 s = 0.0
 
 # crystal thickness, nm
-t = 150#nm
+t = 50#nm
 
 #integration step, nm
 dt = 0.5#nm
 
 # pixel scale
-pix2nm = 1#nm per pixel
+#want more or less pixels? this will change the image size
+# with an according increase (<1) or decrease (>1) in calculation time
+pix2nm = 0.8#nm per pixel
 
 # default number of pixels arounnd the dislocation
 pad = 40#pixels
@@ -117,19 +120,18 @@ a0 = 0.4
 # Poisson's ratio
 nu = 0.3
 
+# Half the distance between dislocations, if a pair
+sep=int(pad/2)#in pixels
+
 ## Vector inputs
 # NB cubic crystals only! Everything here in the crystal reference frame
 
 # Burgers vectors: two partial dislocations
 si=1/6
-b1 = np.array((si,-si,-2*si))
-b2 = np.array((2*si,si,-si))
+b1 = np.array((si,-si,2*si))
+# b2 = np.array((0.,0.,0.))
+b2 = np.array((2*si,si,si))
 
-# position of centre point of dislocation line relative to centre of volume
-# ((1,0,0)) is vertical up, ((0,1,0)) is horizontal right, ((0,0,1)) is horiz. left
-ti=int(pad/2)
-q1 = np.array((-ti,0,0))#pixels
-q2 = np.array((ti,0,0))
 
 # line direction 
 u = np.array((1,1,1))
@@ -138,11 +140,25 @@ u = np.array((1,1,1))
 z = np.array((1,1,0))
 
 # g-vector 
-g = np.array((-2,2,0))
+g = np.array((-1,1,-1))
 
 
 
 ### setup calculations ###
+
+#scale dimensions
+X0i=X0i/pix2nm
+Xg=Xg/pix2nm
+t=t/pix2nm
+pad=int(pad/pix2nm+0.5)
+picmax=int(picmax/pix2nm+0.5)
+sep=int(sep/pix2nm+0.5)
+a0=a0/pix2nm
+
+# position of centre point of dislocation line relative to centre of volume
+# ((1,0,0)) is vertical up, ((0,1,0)) is horizontal right, ((0,0,1)) is horiz. left
+q1 = np.array((-sep,0,0))#pixels
+q2 = np.array((sep,0,0))
 
 # x, y and z are the defining unit vectors of the simulation volume
 # written in the crystal frame
@@ -190,8 +206,9 @@ gDisp = c2s @ g
 gDisp = leng*gDisp/(np.dot(gDisp,gDisp)**0.5)
 bDisp1 = c2s @ b1
 bDisp1 = leng*bDisp1/(np.dot(bDisp1,bDisp1)**0.5)
-bDisp2 = c2s @ b2
-bDisp2 = leng*bDisp2/(np.dot(bDisp2,bDisp2)**0.5)
+if (abs(b2[0])+abs(b2[1])+abs(b2[2])>eps):
+    bDisp2 = c2s @ b2
+    bDisp2 = leng*bDisp2/(np.dot(bDisp2,bDisp2)**0.5)
 
 # g-vector magnitude, nm^-1
 g = g/a0
@@ -204,14 +221,12 @@ b2 = a0*b2
 # image dimensions are length of dislocation line projection in y
 # plus pad pixels on each edge
 xmax = 2*pad# in pixels
-xdim = xmax*pix2nm# in nm
 # there are zmax steps over the thickness
 zmax = int(0.5+t/dt)
 
 if (abs(np.dot(u,z))>eps):#dislocation is not in the plane of the foil
     # y-length needed to capture the full length of the dislocation plus padding
-    ydim = t*np.tan(phi) + 2*pix2nm*pad#in nm
-    ymax = int(ydim/pix2nm)# in pixels
+    ymax = int(t*np.tan(phi) + 2*pad)# in pixels
     if (ymax>picmax):
         ymax = picmax
     # corresponding thickness range
@@ -222,7 +237,7 @@ else:# dislocation is in the plane of the foil
     hpad=0
 zrange =2*(zmax+hpad) + 1#extra 1 for interpolation
 # the height of the array for strain calcs
-zdim = (zrange-1)*dt*pix2nm#in nm
+zdim = (zrange-1)*dt
 
 ##################################
 # calculate strain field and hence
@@ -238,28 +253,45 @@ p2 = np.array((pad+0.5, 0.5, (hpad+zmax)*dt+0.5)) + q2
 firs=min(p1[0],p2[0])
 las=max(p1[0],p2[0])
 # calculation of displacements
-for i in range (xmax):
-    #looping over z with ymax steps 
-    for k in range(zrange):
-        #coord of current voxel relative to centre in simulation frame is xyz
-        v = np.array((i, 0, k*dt))
-        #first dislocation
-        xyz = s2c @ (pix2nm*(v-p1))
-        R1 = displaceR( xyz, b1, u, c2d, d2c )
-        #second dislocation
-        xyz = s2c @ (pix2nm*(v-p2))
-        R2 = displaceR( xyz, b2, u, c2d, d2c )
-        R = R1 + R2
-        gdotR = np.dot(g,R)
-        #dislocation 1 at dz
-        xyz = s2c @ (pix2nm*(v-p1+dz))
-        R1 = displaceR( xyz, b1, u, c2d, d2c )
-        #second dislocation
-        xyz = s2c @ (pix2nm*(v-p2+dz))
-        R2 = displaceR( xyz, b2, u, c2d, d2c )
-        Rdz = R1 + R2
-        gdotRdz = np.dot(g,Rdz)
-        sxz[k,i] = (gdotRdz - gdotR)/(dz[2]*pix2nm)
+# to avoid additional calculation: one dislocation
+if (abs(b2[0])+abs(b2[1])+abs(b2[2])<eps):
+    for i in range (xmax):
+        #looping over z with ymax steps 
+        for k in range(zrange):
+            #coord of current voxel relative to centre in simulation frame is xyz
+            v = np.array((i, 0, k*dt))
+            #first dislocation
+            xyz = s2c @ (v-p1)
+            R = displaceR( xyz, b1, u, c2d, d2c )
+            gdotR = np.dot(g,R)
+            #dislocation 1 at dz
+            xyz = s2c @ (v-p1+dz)
+            Rdz = displaceR( xyz, b1, u, c2d, d2c )
+            gdotRdz = np.dot(g,Rdz)
+            sxz[k,i] = (gdotRdz - gdotR)/dz[2]
+else:#two dislocations
+    for i in range (xmax):
+        #looping over z with ymax steps 
+        for k in range(zrange):
+            #coord of current voxel relative to centre in simulation frame is xyz
+            v = np.array((i, 0, k*dt))
+            #first dislocation
+            xyz = s2c @ (v-p1)
+            R1 = displaceR( xyz, b1, u, c2d, d2c )
+            #second dislocation
+            xyz = s2c @ (v-p2)
+            R2 = displaceR( xyz, b2, u, c2d, d2c )
+            R = R1 + R2
+            gdotR = np.dot(g,R)
+            #dislocation 1 at dz
+            xyz = s2c @ (v-p1+dz)
+            R1 = displaceR( xyz, b1, u, c2d, d2c )
+            #second dislocation
+            xyz = s2c @ (v-p2+dz)
+            R2 = displaceR( xyz, b2, u, c2d, d2c )
+            Rdz = R1 + R2
+            gdotRdz = np.dot(g,Rdz)
+            sxz[k,i] = (gdotRdz - gdotR)/(dz[2])
 
 ##################################
 # calculate image
@@ -303,19 +335,11 @@ for i in range (xmax):
   
 ##################################    
     ### save & show the result ###
-    
+t=t*pix2nm
 imgname="BF_t="+str(int(t))+"_s"+str(s)+".tif"
-spoink = tif.open(imgname, mode='w')
-spoink.write_image(Ib)
-spoink.close
+Image.fromarray(Ib).save(imgname)
 imgname="DF_t="+str(int(t))+"_s"+str(s)+".tif"
-spoink = tif.open(imgname, mode='w')
-spoink.write_image(Id)
-spoink.close
-imgname="dgdotRdz.tif"
-spoink = tif.open(imgname, mode='w')
-spoink.write_image(sxz)
-spoink.close
+Image.fromarray(Id).save(imgname)
 
 fig=plt.figure(figsize=(8, 4))
 
@@ -331,10 +355,11 @@ plt.axis("off")
 if ((abs(bDisp1[0])+abs(bDisp1[1])) < eps):#Burgers vector is along z
     plt.annotate(".", xy=(pt,pt))
 else:
-    plt.arrow(pt,pt,bDisp1[1],-bDisp1[0], shape='full', head_width=3, head_length=6)    
-    plt.arrow(pt,3*pt,bDisp2[1],-bDisp2[0], shape='full', head_width=3, head_length=6)    
+    plt.arrow(pt,pt,bDisp1[1],-bDisp1[0], shape='full', head_width=3, head_length=6)
+    if (abs(b2[0])+abs(b2[1])+abs(b2[2])>eps):
+        plt.arrow(pt,3*pt,bDisp2[1],-bDisp2[0], shape='full', head_width=3, head_length=6)    
+        plt.annotate("b2", xy=(pt+2, 3*pt+2))
 plt.annotate("b1", xy=(pt+2, pt+2))
-plt.annotate("b2", xy=(pt+2, 3*pt+2))
 bbox_inches=0
 plotnameP="t="+str(int(t))+"_s"+str(s)+".png"
 print(plotnameP)
