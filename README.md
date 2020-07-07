@@ -19,7 +19,7 @@ Version v1.4 has two dislocations rather than one (gives the same result as v1.3
 6) Maximum image size picmax, assuming 1 pix/nm.  Will over-rule pad.
 7) Lattice parameter a0, in nm.
 8) Poisson's ratio nu.
-9) Burgers vector b in the usual Miller indices (fractional unit cell coordinates).  In version v1.4 there are TWO parallel dislocations with Burgers vector b1 and b2.
+9) Burgers vector b in the usual Miller indices (fractional unit cell coordinates).  In version v1.4 onwards there are TWO parallel dislocations with Burgers vector b1 and b2.
 10) sep (v1.5) half of the separation of the two dislocations (relative to the centre of the simulation); dislocation 1 is shifted up by sep, 2 is shifted down by sep.
 11) Line direction u in Miller indices
 12) Foil normal z in Miller indices
