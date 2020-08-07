@@ -83,9 +83,6 @@ sep = 0#int(pad / 2)  # in pixels
 # Vector inputs
 # NB cubic crystals only! Everything here in the crystal reference frame
 
-## Vector inputs
-# NB cubic crystals only! Everything here in the crystal reference frame
-
 # Burgers vectors: two partial dislocations
 si = 1 / 2
 b1 = np.array((si, 0, si))
@@ -100,6 +97,8 @@ z = np.array((1, 1, 0))
 
 # g-vector
 g = np.array((1,-1,0))
+
+
 
 # setup calculations
 
