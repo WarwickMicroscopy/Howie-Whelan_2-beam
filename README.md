@@ -27,5 +27,4 @@ Version v1.4 has two dislocations rather than one (gives the same result as v1.3
 
 Images are saved as 32-bit .tif files and a .png using the default path.
 
-
-Very significant speed up (10^3 - 10^5) would be possible by using a more efficient integration routine, linear combination of solutions, and parallelisation on a pixel basis using a GPU.  Maybe to be implemented at a future time.
+New version v2.1 includes an openCL speed up written by Jon Peters which is about 50,000x faster on a Dell Inspiron 7577 laptop.  Requires funcs_richard and funcs_opencl. Input is now between lines 30 and 100.
