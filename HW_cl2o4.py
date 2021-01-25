@@ -35,7 +35,7 @@ __kernel void difference(__global float *in_out, __global float *in, float dz) {
     int xsiz = get_global_size(1);
     int id = xid + zid * xsiz;
     
-    in_out[id] = (in[id] - in_out[id]) / dz;
+    in_out[id] = (-in[id] + in_out[id]) / dz;//should this change sign???
 }
 
 __kernel void displacement(__global float *image_out,
@@ -56,31 +56,30 @@ __kernel void displacement(__global float *image_out,
     int id = xid + zid * xsiz;
     
     // vector from dislocation to this pixel, in nm
-    float xR = ((float) xid + 0.5f - (float) xsiz / 2)*pix2nm;
+    float xR = ((float) xid + 0.5f - (float) xsiz / 2);// / pix2nm;
     float til = sin(phi) + (float) xsiz * tan(psi)/( 2* (float) zsiz);
-    float yR = (((float) zid + 0.5f + dz - (float) zsiz / 2)*til*dt )*pix2nm + xR*tan(theta);
+    float yR = (((float) zid + 0.5f + dz - (float) zsiz / 2)*til*dt );// / pix2nm + xR*tan(theta);
     float3 r_d = {xR, yR, 0.0f};
     float r_mag = sqrt(dot(r_d, r_d));
     //cos(theta) & sin(theta) relative to Burgers vector
-    float ct = dot(r_d, b_unit) / r_mag;
-    float3 tu = (float3) {0.0f, 0.0f, 1.0f};
-    float st = dot(tu, cross(b_unit, r_d) / r_mag);
-    //Screw displacement
+    float ct = dot(r_d, b_unit) / r_mag; //-ve of v2.1
+    float3 tz = {0.0f,0.0f,1.0f};
+    float st = dot(tz, cross(b_unit, r_d) / r_mag);
+    //Screw displacement in dislocation frame
     float d_screw = b_screw * ( atan(r_d.y / (r_d.x)) - M_PI_F * (r_d.x < 0) ) / (2.0f * M_PI_F);
-    float3 temp_1 = (float3) {0.0f, 0.0f, d_screw};
-    float3 r_screw = matmulvec(d2c, temp_1);
+    float3 screw_1 = (float3) {0.0f, 0.0f, d_screw};
+
+    //edge part 1 in dislocation frame
+    float3 edge_1 = b_edge_d * ct * st / (2.0f * M_PI_F * (1.0f - nu));//error fixed from v2.1, 2 not 4
+    //edge part 2 in dislocation frame
+    float3 edge_2 = cross(b, u) * (((2.0f - 4.0f * nu) * log(r_mag) + (ct * ct - st * st)) / (8.0f * M_PI_F * (1.0f - nu)));
     
-    float3 temp_2 = b_edge_d * ct * st / (2.0f * M_PI_F * (1.0f - nu));
-    float3 r_edge_0 = matmulvec(d2c, temp_2);
-    
-    float3 r_edge_1 = cross(b, u) * (((2.0f - 4.0f * nu) * log(r_mag) + (ct * ct - st * st)) / (8.0f * M_PI_F * (1.0f - nu)));
-    
-    float3 r_sum = r_screw + r_edge_0 + r_edge_1;
+    float3 r_sum = matmulvec(d2c, (screw_1 + edge_1 + edge_2) );
     
     //
     
+//    image_out[id] += r_sum.x;
     image_out[id] += dot(g, r_sum);
-//    image_out[id] += zid;
 }
 '''
 
@@ -179,8 +178,8 @@ __kernel void propagate_wave(__global float4 *in_out, __global float *sxz,
     float2 big_c[4] = {cos_beta_2, sin_beta_2, -sin_beta_2.x * exp_alpha, cos_beta_2.x * exp_alpha};
     float2 big_c_t[4] = {big_c[0], big_c[2], big_c[1], big_c[3]};
     
-    float2 big_g_g = 2.0f * M_PI_F * gamma * dt * pix2nm;
-    float2 big_g_q = -2.0f * M_PI_F * q * dt * pix2nm;
+    float2 big_g_g = 2.0f * M_PI_F * gamma * dt ;
+    float2 big_g_q = -2.0f * M_PI_F * q * dt ;
     
     float2 big_g_0 = exp(big_g_q.x) * (float2) { cos(big_g_g.x), sin(big_g_g.x) };
     float2 big_g_3 = exp(big_g_q.y) * (float2) { cos(big_g_g.y), sin(big_g_g.y) };
@@ -238,7 +237,7 @@ class ClHowieWhelan:
         self.displace_r(shape, out_buf_2, c2d_buf, d2c_buf, pix2nm, u, g, b, c2d, nu, phi, psi, theta, dt, dz)
 
         # subtract one from the other to get the gradient
-        dz_32 = np.float32(dz)
+        dz_32 = np.float32(dz*dt)
         self.disp_r_prog.difference(self.queue, shape, None, self.sxz_buf, out_buf_2, dz_32)
                 
 
@@ -247,7 +246,8 @@ class ClHowieWhelan:
         b_screw = np.dot(b, u)
         b_edge = c2d @ (b - b_screw * u)  # NB a vector
         b_unit = b_edge / (np.dot(b_edge, b_edge) ** 0.5)
-
+        gD = c2d @ g
+        
         # float3 is actually a float4 in disguise?
         nu_32 = np.float32(nu)
         dt_32 = np.float32(dt)

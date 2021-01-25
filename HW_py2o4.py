@@ -43,7 +43,7 @@ def howieWhelan(F_in,Xg,X0i,s,alpha,t):
 
     return F_out
 
-def gdotR(rD, bscrew, bedge, beUnit, bxu, d2c, nu, g):
+def gdotR(rD, bscrew, bedge, beUnit, bxu, d2c, nu, gD):
     # returns displacement vector R at coordinate xyz
     r2 = np.dot(rD,rD)
     rmag = r2**0.5
@@ -62,29 +62,30 @@ def gdotR(rD, bscrew, bedge, beUnit, bxu, d2c, nu, g):
     # part 2: (b x u)*( (1-2v)ln(r)/2(1-v) + cos(2theta)/4(1-v) )/2pi
     # using cos(2theta)= cos^2(theta) - sin^2(theta)
     Redge1 = bxu*( ( (2-4*nu)*np.log(rmag)+(ct**2-st**2) )/(8*np.pi*(1-nu)))
-    # total displacement in the crystal frame
-    R = d2c @ (Rscrew + Redge0 + Redge1)
+    # total displacement 
+    R = (Rscrew + Redge0 + Redge1)
     # dot product with g-vector
-    gR = np.dot(g,R)
+    gR = np.dot(gD,R)
+#    gR = np.dot(gD,Redge1)
     return gR
 
 def calculate_deviations(xsiz, zsiz, pix2nm, t, dt, u, g, b, c2d, nu, phi, psi, theta):
     # calculates the local change in deviation parameter s as the z-gradient of the displacement field
     
-    #dislocation components in the dislocation reference frame
+    #dislocation components & g: in the dislocation reference frame
     bscrew = np.dot(b,u)#NB a scalar
     bedge = c2d @ (b - bscrew*u)#NB a vector
     beUnit = bedge/(np.dot(bedge,bedge)**0.5)#a unit vector
     bxu = c2d @ np.cross(b,u)
+    gD = c2d @ g
     #tranformation matrix from dislocation to crystal frame
     d2c = np.transpose(c2d)
-    
     #the x-z array array of deviation parameters
     sxz = np.zeros((xsiz, zsiz+1), dtype='f')#32-bit for .tif saving, +1 is for interpolation
 
     # small z value used to get derivative
     dz = 0.01
-    deltaz = np.array((0, dz, 0))
+    deltaz = np.array((0, dt*dz, 0)) / pix2nm
 
     # calculation of displacements R and the gradient of g.R
     for x in range (xsiz):
@@ -95,15 +96,14 @@ def calculate_deviations(xsiz, zsiz, pix2nm, t, dt, u, g, b, c2d, nu, phi, psi, 
             rD = np.array((rX,
                            dt*( (0.5+z-zsiz/2)*(np.sin(phi) + xsiz*np.tan(psi)/(2*zsiz)) )
                                + rX*np.tan(theta),
-                           0))*pix2nm#in nm
+                           0)) / pix2nm#in nm
             #Displacement R is calculated in the crystal frame
-            gR = gdotR(rD, bscrew, bedge, beUnit, bxu, d2c, nu, g )
-            rDdz = rD + np.array((0, dt*dz, 0))*pix2nm#in nm
-            gRdz = gdotR(rDdz, bscrew, bedge, beUnit, bxu, d2c, nu, g )
+            gR = gdotR(rD, bscrew, bedge, beUnit, bxu, d2c, nu, gD )
+            rDdz = rD + deltaz
+            gRdz = gdotR(rDdz, bscrew, bedge, beUnit, bxu, d2c, nu, gD )
             sxz[x,z] = (gRdz - gR)/dz
-#            sxz[x,z] = np.sqrt(np.dot(rD,rD))
+#            sxz[x,z] = gR#np.sqrt(np.dot(rD,rD))
                 
-    fig = plt.figure(figsize=(8, 4))
     plt.imshow(sxz)
     plt.axis("off")    
     return sxz

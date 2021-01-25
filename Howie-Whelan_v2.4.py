@@ -58,7 +58,7 @@ toc = time.perf_counter()
 X0i = 1000.0  # nm
 # Xg is the (complex) extinction distance for g
 # The imaginary part should be larger than X0i
-Xg = 70.2 + 1j * X0i * 1.07  # nm
+Xg = 58.0+ 1j * X0i * 1.06  # nm
 
 # lattice parameter nm
 a0 = 0.4
@@ -71,22 +71,23 @@ nu = 0.3
 t0 = 323  # nm
 
 # the electron beam direction (pointing into the image)
-z = np.array((10, 1, 11))#Miller indices
+z = np.array((1, 5, 6))#Miller indices
 
 # the foil normal (also pointing into the image)
 n = np.array((5, 2, 8))#Miller indices
 
 # g-vector
-g = np.array((-1,1,1))#Miller indices
+g = np.array((1,1,-1))#Miller indices
 
 # deviation parameter (typically between -0.1 and 0.1)
-s = 0.5/70.2
+s = 0.0046
 
 ################################## # the dislocation
 # Burgers vector 
-#b = np.array((-0.5, 0.0, -0.5))
-#b = np.array((0.0, 0.5, -0.5))
-b = np.array((-0.5, -0.5, 0.0))
+#b0 = np.array((-0.5, 0.0, -0.5))
+#b0 = np.array((0.0, 0.5, -0.5))
+b0 = np.array((-0.5, -0.5, 0.0))
+#b0 = np.array((eps, 0.0, 0.0))
 
 # line direction
 u = np.array((5, 2, 3))#Miller indices
@@ -102,7 +103,7 @@ dt = 0.2  # fraction of a slice
 pix2nm = 0.5# nm per pixel
 
 # default number of pixels arounnd the dislocation
-pad = 50  # nm
+pad = 60  # nm
 
 #Gaussian blur sigma, nm
 blursigma = 2.0
@@ -135,12 +136,15 @@ blursigma = blursigma / pix2nm
 #scale thickness & pad too to make later eqns neater
 t = t0 / pix2nm
 pad = pad / pix2nm
+a = a0 / pix2nm
+X0i = X0i / pix2nm
+Xg = Xg / pix2nm
 # number of wave propagation steps
 zlen = int(t/dt + 0.5)
 # g-vector magnitude, nm^-1
-g = g / a0
+g = g / a
 # Burgers vector in nm
-b= a0 * b
+b= a * b0
 
 ################################## Crystal<->Simulation frames
 # x, y and z are the defining unit vectors of the simulation volume
@@ -218,8 +222,7 @@ else:  # dislocation is at an angle to the beam direction
     w = int(t*nS[2]*nS[2]*uS[1]/abs(np.dot(u,n1)) + 0.5)
     ysiz = w + xsiz # in pixels
     zsiz = int( (2*t*nS[2] + hpad + xsiz*np.tan(abs(psi)) )/dt + 0.5) # in slices
-print(xsiz,w,ysiz,zsiz)
-print(nS)
+# print(xsiz,ysiz,zsiz)
 
 ################################## Set up x-z' array for strain fields and deviation parameters
 # this is a 'generalised cross section' as used by Head & co
@@ -238,7 +241,6 @@ if use_cl:
     cl_hw.calculate_deviations(xsiz, zsiz, pix2nm, dt, u, g, b, c2d, d2c, nu, phi, psi, theta)
     # intermediate output, for debugging
     # sxz=cl_hw.get_sxz_buffer(xsiz, (zsiz+1))
-    # fig = plt.figure(figsize=(8, 8))
     # plt.imshow(sxz)
     # plt.axis("off")    
     Ib, Id = cl_hw.calculate_image(xsiz, ysiz, zsiz, pix2nm, t, dt, s, 
@@ -254,16 +256,20 @@ end_time = time.perf_counter()
 duration = end_time - start_time
 print("Main loops took: " + str(duration) + " seconds")
 
+ker = int(7/pix2nm+0.5)+1
 # Gaussian blur (input, kernel size, sigma)
-Ib2= cv.GaussianBlur(Ib,(7,7),blursigma)
-Id2= cv.GaussianBlur(Id,(7,7),blursigma)
+Ib2= cv.GaussianBlur(Ib,(ker,ker),blursigma)
+Id2= cv.GaussianBlur(Id,(ker,ker),blursigma)
 
-# if save_images:
-#     Ib2= cv.GaussianBlur(Ib,(7,7),blursigma)
-#     Id2= cv.GaussianBlur(Id,(7,7),blursigma)
-# else:
-#     Ib2=Ib
-#     Id2=Id
+if save_images:
+    Ib2= cv.GaussianBlur(Ib,(7,7),blursigma)
+    Id2= cv.GaussianBlur(Id,(7,7),blursigma)
+else:
+    Ib2=Ib
+    Id2=Id
+#pixels at 0 and 1 to allow contrast comparisons
+Ib2[0,0]=0
+Ib2[0,1]=1
 
 ################################## Output image notation stuff
 # g-vector on image is leng pixels long
